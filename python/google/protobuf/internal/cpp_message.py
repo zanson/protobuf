@@ -504,6 +504,12 @@ def _AddMessageMethods(message_descriptor, cls):
   def Clear(self):
     return self._cmsg.Clear()
 
+  def ClearUnknownFields(self):
+    return self._cmsg.ClearUnknownFields()
+
+  def ClearUnknownFieldsRecursive(self):
+    return self._cmsg.ClearUnknownFieldsRecursive()
+
   def IsInitialized(self, errors=None):
     if self._cmsg.IsInitialized():
       return True

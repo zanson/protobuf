@@ -156,6 +156,8 @@ static PyObject* CMessage_Clear(CMessage* self, PyObject* args);
 static PyObject* CMessage_ClearField(CMessage* self, PyObject* args);
 static PyObject* CMessage_ClearFieldByDescriptor(
     CMessage* self, PyObject* args);
+static PyObject* CMessage_ClearUnknownFields(CMessage* self, PyObject* args);
+static PyObject* CMessage_ClearUnknownFieldsRecursive(CMessage* self, PyObject* args);
 static PyObject* CMessage_CopyFrom(CMessage* self, PyObject* args);
 static PyObject* CMessage_DebugString(CMessage* self, PyObject* args);
 static PyObject* CMessage_DeleteRepeatedField(CMessage* self, PyObject* args);
@@ -209,6 +211,10 @@ static PyMethodDef CMessageMethods[] = {
           "Returns the size of the message in bytes."),
   CMETHOD(Clear, METH_NOARGS,
           "Clears a protocol message."),
+  CMETHOD(ClearUnknownFields, METH_NOARGS,
+          "Clears the unknown fields from a protocol message."),
+  CMETHOD(ClearUnknownFieldsRecursive, METH_NOARGS,
+          "Recursively clears the unknown fields from a protocol message and all its sub messages."),
   CMETHOD(ClearField, METH_O,
           "Clears a protocol message field by name."),
   CMETHOD(ClearFieldByDescriptor, METH_O,
@@ -961,6 +967,41 @@ static PyObject* CMessage_Clear(CMessage* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
+static PyObject* CMessage_ClearUnknownFields(CMessage* self, PyObject* args) {
+  AssureWritable(self);
+  self->message->GetReflection()->MutableUnknownFields(self->message)->Clear();
+  Py_RETURN_NONE;
+}
+
+static void ClearUnknownFieldsRecursive(google::protobuf::Message* message) {
+  const google::protobuf::Reflection* reflection = message->GetReflection();
+  reflection->MutableUnknownFields(message)->Clear();
+  vector<const google::protobuf::FieldDescriptor*> fields;
+  reflection->ListFields(*message, &fields);
+  for(vector<const google::protobuf::FieldDescriptor*>::iterator it = fields.begin(); it != fields.end(); ++it)
+  {
+    if (google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE == (*it)->cpp_type()) {
+      if (google::protobuf::FieldDescriptor::LABEL_REPEATED == (*it)->label()) {
+        const int numItems = reflection->FieldSize(*message, (*it));
+        for (int index = 0; index < numItems; ++index)
+        {
+          google::protobuf::Message* msg = reflection->MutableRepeatedMessage(message, (*it), index);
+          ClearUnknownFieldsRecursive(msg);
+        }
+      } else {
+        google::protobuf::Message* msg = reflection->MutableMessage(message, (*it));
+        ClearUnknownFieldsRecursive(msg);
+      }
+    }
+  }
+}
+
+static PyObject* CMessage_ClearUnknownFieldsRecursive(CMessage* self, PyObject* args) {
+  AssureWritable(self);
+  ClearUnknownFieldsRecursive(self->message);
+  Py_RETURN_NONE;
+}
+
 static PyObject* CMessage_IsInitialized(CMessage* self, PyObject* args) {
   return PyBool_FromLong(self->message->IsInitialized() ? 1 : 0);
 }
@@ -1100,9 +1141,11 @@ static PyObject* CMessage_AssignRepeatedScalar(CMessage* self, PyObject* args) {
   while ((next = PyIter_Next(iter)) != NULL) {
     if (InternalAddRepeatedScalar(
         message, cfield_descriptor->descriptor, next) == NULL) {
+      Py_DECREF(next);
       Py_DECREF(iter);
       return NULL;
     }
+    Py_DECREF(next);
   }
   Py_DECREF(iter);
   Py_RETURN_NONE;

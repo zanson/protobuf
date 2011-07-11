@@ -622,6 +622,14 @@ def _AddClearMethod(message_descriptor, cls):
     self._fields = {}
     self._Modified()
   cls.Clear = Clear
+  def ClearUnknownFields(self):
+    # Clear unknown fields.
+    raise Exception('Only implemented in cpp library')
+  cls.ClearUnknownFields = ClearUnknownFields
+  def ClearUnknownFieldsRecursive(self):
+    # Clear unknown fields recursively.
+    raise Exception('Only implemented in cpp library')
+  cls.ClearUnknownFieldsRecursive = ClearUnknownFieldsRecursive
 
 
 def _AddHasExtensionMethod(cls):
